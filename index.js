@@ -3,7 +3,7 @@ const express = require('express')
 // importing cores
 const cors = require('cors')
 // importing mongodb
-const { MongoClient, ServerApiVersion } = require('mongodb')
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb')
 // importing dotenv
 require('dotenv').config()
 
@@ -42,14 +42,58 @@ async function run() {
 
     // backed apis start here
 
-    
-
-    app.post('/add-job',async(req,res)=>{
-        const job = req.body;
-        const result = await jobCollection.insertOne(job);
-        res.send(result);
+    // getting all jobs from the server
+    app.get('/jobs', async (req, res) => {
+      const jobs = await jobCollection.find().toArray();
+      res.send(jobs);
     })
 
+    // get job by id
+    app.get(`/job/:id`, async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const jobs = await jobCollection.findOne(filter);
+      res.send(jobs);
+    })
+
+    // update a job by id
+
+    app.put('/update-job/:id', async (req, res) => {
+      const id = req.params.id;
+      const job = req.body;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: job
+      };
+      const result = await jobCollection.updateOne(filter, updateDoc, options);
+      
+      res.send(result);
+    })
+
+    // get jobs by specific email
+    app.get(`/jobs/:email`, async (req, res) => {
+      const email = req.params.email;
+      const filter = { 'buyer.buyer_email': email };
+      const result = await jobCollection.find(filter).toArray();
+      res.send(result);
+    })
+
+    // adding new job to the server
+    app.post('/add-job', async (req, res) => {
+      const job = req.body;
+      const result = await jobCollection.insertOne(job);
+      res.send(result);
+    })
+
+    // delete job by id
+    app.delete('/my-posted-jobs/:id', async (req, res) => {
+      const id = req.params.id;
+      console.log(id);
+      const filter = { _id: new ObjectId(id) };
+      const result = await jobCollection.deleteOne(filter);
+      res.send(result);
+    })
 
 
 
