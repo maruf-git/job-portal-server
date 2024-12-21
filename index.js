@@ -13,13 +13,39 @@ const jwt = require('jsonwebtoken')
 const port = process.env.PORT || 5000
 // importing express
 const app = express()
+// importing cookie parser
+const cookieParser = require('cookie-parser')
 
 // middlewares
 
+// authentication middleware
+const verifyToken = async (req, res, next) => {
+  const tokenFromClient = req.cookies?.myJwtToken;
+  // no token found check
+  if (!tokenFromClient) return res.status(401).send({ message: 'unauthorized access!' });
+  // invalid token found check
+  jwt.verify(tokenFromClient, process.env.SECRET_KEY, (err, decoded) => {
+    if (err) {
+      return res.status(401).send({ message: 'unauthorized access!' });
+    }
+    req.user = decoded;
+  })
+  // console.log("token from client:", tokenFromClient)
+  next();
+}
+
+// for jwt
+const corsOptions = {
+  origin: ['http://localhost:5173'],
+  credentials: true,
+  optionalSuccessStatus: 200,
+}
 // using cors middleware
-app.use(cors())
+app.use(cors(corsOptions))
 // using express.json middleware
 app.use(express.json())
+// using cookie parser
+app.use(cookieParser())
 
 // mongodb uri 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.eeint.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -38,13 +64,26 @@ async function run() {
     // backend functionality starts here
 
     // jwt
-    // app.post('/jwt',async(res,res)=>{
-    //   const email = req.body;
-
-    //   create token
-    //   jwt.sign(email,)
-
-    // })
+    app.post('/jwt', async (req, res) => {
+      const email = req.body;
+      // create token
+      const token = jwt.sign(email, process.env.SECRET_KEY, { expiresIn: '365d' })
+      console.log(token);
+      // storing token to the cookie storage
+      res.cookie('myJwtToken', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+      }).send({ success: true })
+    })
+    // logout || clear cookie from browser
+    app.get('/logout', async (req, res) => {
+      res.clearCookie('myJwtToken', {
+        maxAge: 0,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+      }).send({ success: true })
+    })
 
 
 
@@ -89,8 +128,10 @@ async function run() {
     })
 
     // get jobs by specific email
-    app.get(`/jobs/:email`, async (req, res) => {
+    app.get(`/jobs/:email`, verifyToken, async (req, res) => {
       const email = req.params.email;
+      const decodedEmail = req.user.email;
+      if (decodedEmail !== email) return res.status(401).send({ message: 'unauthorized access!' })
       const filter = { 'buyer.buyer_email': email };
       const result = await jobCollection.find(filter).toArray();
       res.send(result);
@@ -104,7 +145,7 @@ async function run() {
     })
 
     // delete job by id
-    app.delete('/my-posted-jobs/:id', async (req, res) => {
+    app.delete('/my-posted-jobs/:id',verifyToken, async (req, res) => {
       const id = req.params.id;
       console.log(id);
       const filter = { _id: new ObjectId(id) };
@@ -138,16 +179,20 @@ async function run() {
     })
 
     // get all bids of an user
-    app.get('/bids/:email', async (req, res) => {
+    app.get('/bids/:email', verifyToken, async (req, res) => {
       const email = req.params.email;
+      const decodedEmail = req.user.email;
+      if (decodedEmail !== email) return res.status(401).send({ message: 'unauthorized access!' })
       const filter = { 'bidder.email': email };
       const result = await bidCollection.find(filter).toArray();
       res.send(result);
     })
 
     // get all bid-request of an user
-    app.get('/bid-requests/:email', async (req, res) => {
+    app.get('/bid-requests/:email', verifyToken, async (req, res) => {
       const email = req.params.email;
+      const decodedEmail = req.user.email;
+      if (decodedEmail !== email) return res.status(401).send({ message: 'unauthorized access!' })
       const filter = { buyer_email: email };
       const result = await bidCollection.find(filter).toArray();
       res.send(result);
@@ -155,10 +200,10 @@ async function run() {
 
     app.patch('/bid-requests-status-update/:id', async (req, res) => {
       const id = req.params.id;
-      const {status} = req.body;
+      const { status } = req.body;
       const update = {
         $set: {
-          status:status
+          status: status
         }
       }
       // console.log(id)
