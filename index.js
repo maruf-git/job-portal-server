@@ -6,6 +6,8 @@ const cors = require('cors')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb')
 // importing dotenv
 require('dotenv').config()
+// jwt
+const jwt = require('jsonwebtoken')
 
 // application port
 const port = process.env.PORT || 5000
@@ -35,10 +37,25 @@ async function run() {
   try {
     // backend functionality starts here
 
+    // jwt
+    // app.post('/jwt',async(res,res)=>{
+    //   const email = req.body;
+
+    //   create token
+    //   jwt.sign(email,)
+
+    // })
+
+
+
+
     // creating database named jobPortalDB
     const database = client.db("jobPortalDB");
     // creating  collection named jobs
     const jobCollection = database.collection("jobs");
+
+    // creating collection named bids
+    const bidCollection = database.collection("bids");
 
     // backed apis start here
 
@@ -67,7 +84,7 @@ async function run() {
         $set: job
       };
       const result = await jobCollection.updateOne(filter, updateDoc, options);
-      
+
       res.send(result);
     })
 
@@ -92,6 +109,63 @@ async function run() {
       console.log(id);
       const filter = { _id: new ObjectId(id) };
       const result = await jobCollection.deleteOne(filter);
+      res.send(result);
+    })
+
+
+    // bid related apis here
+
+    // adding new bid to the bid collection
+    app.post("/add-bid", async (req, res) => {
+      const bid = req.body;
+      // check if the user already placed bid for this job
+      const query = { 'bidder.email': bid.bidder.email, job_id: bid.job_id }
+      const alreadyExist = await bidCollection.findOne(query);
+      console.log("if already exist--->", alreadyExist);
+      if (alreadyExist) return res.status(400).send('You have already placed a bid on this job');
+
+      // save data in bid collection
+      const result = await bidCollection.insertOne(bid);
+
+      // update bid count in job collection
+      const filter = { _id: new ObjectId(bid.job_id) };
+      const update = {
+        $inc: { bid_count: 1 }
+      }
+      const updatedBidCount = await jobCollection.updateOne(filter, update);
+
+      res.send(result);
+    })
+
+    // get all bids of an user
+    app.get('/bids/:email', async (req, res) => {
+      const email = req.params.email;
+      const filter = { 'bidder.email': email };
+      const result = await bidCollection.find(filter).toArray();
+      res.send(result);
+    })
+
+    // get all bid-request of an user
+    app.get('/bid-requests/:email', async (req, res) => {
+      const email = req.params.email;
+      const filter = { buyer_email: email };
+      const result = await bidCollection.find(filter).toArray();
+      res.send(result);
+    })
+
+    app.patch('/bid-requests-status-update/:id', async (req, res) => {
+      const id = req.params.id;
+      const {status} = req.body;
+      const update = {
+        $set: {
+          status:status
+        }
+      }
+      // console.log(id)
+      // console.log(status)
+      const filter = { _id: new ObjectId(id) };
+      const result = await bidCollection.updateOne(filter, update)
+      console.log(result)
       res.send(result);
     })
 
