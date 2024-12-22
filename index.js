@@ -1,11 +1,12 @@
+// importing dotenv
+require('dotenv').config()
 // importing express
 const express = require('express')
 // importing cores
 const cors = require('cors')
 // importing mongodb
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb')
-// importing dotenv
-require('dotenv').config()
+
 // jwt
 const jwt = require('jsonwebtoken')
 
@@ -36,7 +37,11 @@ const verifyToken = async (req, res, next) => {
 
 // for jwt
 const corsOptions = {
-  origin: ['http://localhost:5173'],
+  origin: [
+    'http://localhost:5173',
+    'https://job-portal-bfcb2.web.app',
+    'https://job-portal-bfcb2.firebaseapp.com'
+  ],
   credentials: true,
   optionalSuccessStatus: 200,
 }
@@ -67,7 +72,7 @@ async function run() {
     app.post('/jwt', async (req, res) => {
       const email = req.body;
       // create token
-      const token = jwt.sign(email, process.env.SECRET_KEY, { expiresIn: '365d' })
+      const token = jwt.sign(email, process.env.SECRET_KEY, { expiresIn: '10h' })
       console.log(token);
       // storing token to the cookie storage
       res.cookie('myJwtToken', token, {
@@ -145,7 +150,7 @@ async function run() {
     })
 
     // delete job by id
-    app.delete('/my-posted-jobs/:id',verifyToken, async (req, res) => {
+    app.delete('/my-posted-jobs/:id', verifyToken, async (req, res) => {
       const id = req.params.id;
       console.log(id);
       const filter = { _id: new ObjectId(id) };
